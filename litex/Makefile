@@ -5,3 +5,6 @@ build2:
 
 linux:
 	python3 ./analogue_pocket.py --linux --build
+
+linux-dts:
+	python3 ./linux_dts.py

@@ -891,7 +891,9 @@ module core_top (
   wire apf_master_we;
 
   wire [31:0] ram_data_address;
-  reg [31:0] latched_ram_data_address = 0;
+  // Slot 0 is loaded before the CPU leaves reset. Its bridge address starts at
+  // zero, so translate it to the LiteX main RAM base documented by this core.
+  reg [31:0] latched_ram_data_address = 32'h4000_0000;
   wire [25:0] current_address;
 
   wire [31:0] audio_bus_out;

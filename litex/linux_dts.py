@@ -55,7 +55,7 @@ def main():
     )
     parser.add_argument(
         "--initrd",
-        default="enabled",
+        default=os.path.join("images", "rootfs.cpio.gz"),
         help="Initramfs path, or enabled/disabled for LiteX default placement.",
     )
     parser.add_argument(

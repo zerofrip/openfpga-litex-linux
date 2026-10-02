@@ -1,3 +1,5 @@
+.PHONY: build2 linux linux-dts linux-image linux-package
+
 build2:
 	python3 ./analogue_pocket.py --build
 	cp ./build/litex/software/include/generated/regions.ld ../lang/linker/regions.ld
@@ -8,3 +10,9 @@ linux:
 
 linux-dts:
 	python3 ./linux_dts.py
+
+linux-image:
+	python3 ./linux_image.py
+
+linux-package: linux-dts
+	python3 ./linux_image.py

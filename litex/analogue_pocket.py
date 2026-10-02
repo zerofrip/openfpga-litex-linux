@@ -83,6 +83,7 @@ class BaseSoC(SoCCore):
         sys_clk_freq,
         with_pocket_video=True,
         with_example_slave=True,
+        rom_boot_address=0x40000000,
         **kwargs,
     ):
         platform = analogue_pocket.Platform()
@@ -98,8 +99,8 @@ class BaseSoC(SoCCore):
         self.add_constant("DEPLOYMENT_PLATFORM", "openfpga")
         self.add_constant("DEPLOYMENT_TARGET", "pocket")
 
-        # Allow booting from the first address in SDRAM
-        self.add_constant("ROM_BOOT_ADDRESS", 0x40000000)
+        # Let the BIOS transfer control to the selected SDRAM payload entrypoint.
+        self.add_constant("ROM_BOOT_ADDRESS", rom_boot_address)
         # self.add_constant("SDRAM_TEST_DISABLE", 1)
 
         # SDR SDRAM --------------------------------------------------------------------------------
@@ -286,6 +287,7 @@ def main():
         sys_clk_freq=args.sys_clk_freq,
         with_pocket_video=not args.linux,
         with_example_slave=not args.linux,
+        rom_boot_address=0x40F00000 if args.linux else 0x40000000,
         **soc_args,
     )
     builder_args = parser.builder_argdict

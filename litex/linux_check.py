@@ -20,6 +20,9 @@ EXPECTED_CONSTANTS = {
     "config_cpu_itlb_ways": 4,
     "config_cpu_interrupts": 3,
     "rom_boot_address": 0x40F00000,
+    "video_framebuffer_base": 0,
+    "max_display_width": 0,
+    "max_display_height": 0,
     "timer0_interrupt": 1,
     "uart_interrupt": 2,
 }
@@ -67,11 +70,6 @@ def validate_linux_config(csr_data):
     for name in REQUIRED_CONSTANTS:
         if name not in constants:
             errors.append(f"constant {name}: missing")
-
-    if "video_framebuffer_base" in constants:
-        errors.append(
-            "constant video_framebuffer_base: Linux build must not reserve a framebuffer"
-        )
 
     for name, expected in EXPECTED_CSR_BASES.items():
         actual = csr_bases.get(name)

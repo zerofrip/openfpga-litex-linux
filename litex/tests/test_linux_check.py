@@ -45,12 +45,16 @@ class LinuxCheckTest(unittest.TestCase):
     def test_rejects_framebuffer_and_wrong_irq_layout(self):
         config = valid_config()
         config["constants"]["video_framebuffer_base"] = 0x40C00000
+        config["constants"]["max_display_width"] = 266
+        config["constants"]["max_display_height"] = 240
         config["constants"]["timer0_interrupt"] = 2
         config["csr_bases"]["uart"] = "0xf0005800"
 
         errors = linux_check.validate_linux_config(config)
 
         self.assertTrue(any("video_framebuffer_base" in error for error in errors))
+        self.assertTrue(any("max_display_width" in error for error in errors))
+        self.assertTrue(any("max_display_height" in error for error in errors))
         self.assertTrue(any("timer0_interrupt" in error for error in errors))
         self.assertTrue(any("CSR uart" in error for error in errors))
 

@@ -147,6 +147,13 @@ class BaseSoC(SoCCore):
 
             self.add_constant("MAX_DISPLAY_WIDTH", timings["h_active"])
             self.add_constant("MAX_DISPLAY_HEIGHT", timings["v_active"])
+        else:
+            # The Pocket fork's BIOS clears the framebuffer unconditionally.
+            # Keep its build-time constants available, but make the loop empty
+            # so Linux payload memory is never overwritten.
+            self.add_constant("VIDEO_FRAMEBUFFER_BASE", 0)
+            self.add_constant("MAX_DISPLAY_WIDTH", 0)
+            self.add_constant("MAX_DISPLAY_HEIGHT", 0)
 
         # CSR definitions --------------------------------------------------------------------------
         self.add_module("apf_audio", APFAudio(platform))

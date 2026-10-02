@@ -78,7 +78,13 @@ class _CRG(LiteXModule):
 
 
 class BaseSoC(SoCCore):
-    def __init__(self, sys_clk_freq, **kwargs):
+    def __init__(
+        self,
+        sys_clk_freq,
+        with_pocket_video=True,
+        with_example_slave=True,
+        **kwargs,
+    ):
         platform = analogue_pocket.Platform()
 
         # CRG --------------------------------------------------------------------------------------
@@ -111,6 +117,8 @@ class BaseSoC(SoCCore):
                 l2_cache_size=0,
             )
 
+        # Keep the VGA pads in the generated LiteX module even when Linux does not
+        # instantiate the framebuffer; core_top.sv has a fixed VGA port contract.
         self.submodules.videophy = VideoPocketPHY(platform.request("vga"))
         # 57.12 MHz
         timings = {
@@ -124,19 +132,20 @@ class BaseSoC(SoCCore):
             "v_sync_offset": 1,
             "v_sync_width": 8,
         }
-        
-        self.add_video_framebuffer(
-            phy=self.videophy,
-            timings=[
-                "266x240@60Hz",
-                timings,
-            ],
-            format="rgb565",
-            clock_domain="vid",
-        )
 
-        self.add_constant("MAX_DISPLAY_WIDTH", timings["h_active"])
-        self.add_constant("MAX_DISPLAY_HEIGHT", timings["v_active"])
+        if with_pocket_video:
+            self.add_video_framebuffer(
+                phy=self.videophy,
+                timings=[
+                    "266x240@60Hz",
+                    timings,
+                ],
+                format="rgb565",
+                clock_domain="vid",
+            )
+
+            self.add_constant("MAX_DISPLAY_WIDTH", timings["h_active"])
+            self.add_constant("MAX_DISPLAY_HEIGHT", timings["v_active"])
 
         # CSR definitions --------------------------------------------------------------------------
         self.add_module("apf_audio", APFAudio(platform))
@@ -145,20 +154,22 @@ class BaseSoC(SoCCore):
         self.add_module("apf_input", APFInput(platform))
         self.add_module("apf_interact", APFInteract(platform))
         self.add_module("apf_rtc", APFRTC(platform))
-        self.add_module("apf_video", APFVideo(self, timings["v_active"]))
+        if with_pocket_video:
+            self.add_module("apf_video", APFVideo(self, timings["v_active"]))
 
         self.add_uart(platform)
 
-        example_slave = wishbone.Interface()
-        example_slave_region = SoCRegion(0x8000_0000, 0x10_0000, cached=False)
+        if with_example_slave:
+            example_slave = wishbone.Interface()
+            example_slave_region = SoCRegion(0x8000_0000, 0x10_0000, cached=False)
 
-        self.bus.add_slave("example_slave", example_slave, example_slave_region)
+            self.bus.add_slave("example_slave", example_slave, example_slave_region)
 
-        # For some reason this doesn't make the comb assignments itself?
-        # Master, because the internal wishbone is a slave, and the Verilog one is "master"
-        self.comb += example_slave.connect_to_pads(
-            platform.request("wishbone"), mode="master"
-        )
+            # For some reason this doesn't make the comb assignments itself?
+            # Master, because the internal wishbone is a slave, and the Verilog one is "master"
+            self.comb += example_slave.connect_to_pads(
+                platform.request("wishbone"), mode="master"
+            )
 
         apf_bridge_master = wishbone.Interface()
 
@@ -260,13 +271,32 @@ def main():
         type=float,
         help="System clock frequency.",
     )
+    parser.add_target_argument(
+        "--linux",
+        action="store_true",
+        help="Build a Linux bring-up SoC without the Pocket framebuffer or example slave.",
+    )
     args = parser.parse_args()
 
     soc_args = parser.soc_argdict
+    if args.linux:
+        soc_args["cpu_variant"] = "linux"
 
-    soc = BaseSoC(sys_clk_freq=args.sys_clk_freq, **soc_args)
+    soc = BaseSoC(
+        sys_clk_freq=args.sys_clk_freq,
+        with_pocket_video=not args.linux,
+        with_example_slave=not args.linux,
+        **soc_args,
+    )
     builder_args = parser.builder_argdict
     builder_args["csr_svd"] = "pocket.svd"
+    if args.linux:
+        output_dir = builder_args.get("output_dir")
+        if not output_dir:
+            output_dir = os.path.join("build", soc.platform.name)
+            builder_args["output_dir"] = output_dir
+        builder_args["csr_json"] = os.path.join(output_dir, "csr.json")
+        builder_args["csr_csv"] = os.path.join(output_dir, "csr.csv")
     builder = Builder(soc, **builder_args)
 
     root_dir = os.path.abspath("")

@@ -30,6 +30,31 @@ Pocket RAM used:
 * 31% of FPGA BRAM
 * SDRAM
 
+### Linux Bring-up Profile
+
+The optional Linux profile uses the LiteX `linux` CPU variant and removes the
+Pocket framebuffer and example Wishbone slave so that no SDRAM framebuffer
+region is reserved. The generated hardware contract is checked by
+`litex/linux_check.py` on every `make linux` build.
+
+* VexRiscv-SMP: 1 hart, RV32IMAFDC, Sv32 MMU
+* 57.12 MHz system clock
+* 4 KiB direct-mapped instruction and data caches
+* 4-entry instruction and data TLBs
+* 64 MiB SDRAM at `0x4000_0000`
+* OpenSBI region at `0x40f0_0000`
+* CSR, CLINT, and PLIC at `0xf000_0000`, `0xf001_0000`, and `0xf0c0_0000`
+* Timer IRQ 1 and UART IRQ 2
+
+The Pocket slot-0 Linux image layout is:
+
+| Component | Load address | Maximum size |
+| --- | ---: | ---: |
+| Linux `Image` | `0x4000_0000` | `0x00ef_0000` (14.94 MiB) |
+| Device tree | `0x40ef_0000` | 64 KiB |
+| OpenSBI | `0x40f0_0000` | 1 MiB |
+| Initramfs | `0x4100_0000` | 48 MiB |
+
 ## General Operation
 
 ### Data
@@ -100,52 +125,79 @@ I suggest you make this repo a submodule of your main project so you can referen
 
 **NOTE:** You will probably have a bad time if you try to do this with Windows. It should be possible, but I just found lots of pain.
 
+Python 3.11 is known to work with the pinned Migen version; Python 3.14 fails
+during clock-domain name extraction. A complete FPGA build also requires
+Quartus Prime Lite 18.1 with Cyclone V device support, a RISC-V bare-metal GCC
+toolchain, and Scala/sbt when the VexRiscv-SMP RTL must be regenerated. GCC
+13.2.0 is known to work; GCC 14
+turns a conversion in the pinned LiteX BIOS into a build error.
+
 ```bash
-# Enter your working directory
-mkdir riscv
-cd riscv
+# Clone this Linux bring-up branch and all pinned vendor repositories.
+git clone --recursive --branch codex/linux-bringup \
+  https://github.com/zerofrip/openfpga-litex-linux.git
+cd openfpga-litex-linux
+git submodule update --init --recursive --jobs 8
 
-# Clone repo with submodules
-git clone --recursive https://github.com/agg23/openfpga-litex.git
+# Create the Python environment.
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install pyserial requests packaging pyyaml meson ninja
 
-# Create a Python virtualenv with your manager of choice
-...
-
-# Install Python dependencies for LiteX
-pip3 install pyserial
-
-# Install Scala (to build the Vexriscv-smp processor) and sbt
-# See https://www.scala-lang.org/download/
+# Put riscv-none-elf-* (or a compatible multilib RISC-V toolchain), sbt,
+# and Quartus 18.1 on PATH before building.
+export PATH=/path/to/riscv-toolchain/bin:/path/to/quartus/18.1/quartus/bin:$PATH
 ```
 
-[Build and install the RISC-V GNU Toolchain](https://github.com/riscv/riscv-gnu-toolchain):
-
-**NOTE:** The Ubuntu repository version of the toolchain is missing some functionality. You may need to manually compile the toolchain anyway.
+The RISC-V toolchain can be built from
+[riscv-gnu-toolchain](https://github.com/riscv-collab/riscv-gnu-toolchain) or
+installed from a compatible prebuilt distribution. If building it locally,
+enable the newlib multilib target so RV32IMAFDC/ILP32D is available.
 
 ```bash
-cd ~
-
-# Clone the repo
-git clone https://github.com/riscv/riscv-gnu-toolchain.git
-
-# Install dependencies
-...
-
-# Build the newlib, multilib variant of the toolchain
 ./configure --prefix=/opt/riscv --enable-multilib
 make
 ```
 
-This will produce binaries like `riscv64-unknown-elf-gcc`. Note that even though they're `riscv64`, they can be used to build for `riscv32`. The `--enable-multilib` allows building for various RISC-V extensions, so we don't have to create a specialized version of the toolchain.
+This produces binaries such as `riscv64-unknown-elf-gcc`; the multilib build
+can also target RV32. LiteX also detects the `riscv-none-elf-*` prefix used by
+the xPack embedded toolchain.
 
-To build the LiteX SoC:
+#### Linux FPGA build
+
+Generate the Linux LiteX SoC and validate its CPU, memory map, SDRAM, interrupt,
+timer, and framebuffer settings:
 
 ```bash
-cd openfpga-litex/litex/
-make
+cd litex
+make linux
 ```
 
-You can now build the project via Quartus, either through the UI or via CLI.
+Then run the complete Quartus flow from the repository root:
+
+```bash
+cd ..
+quartus_sh --flow compile projects/openFPGA-RISC-V_pocket.qpf
+```
+
+The primary outputs are:
+
+* `projects/output_files/openFPGA-RISC-V_pocket.rbf` for the Pocket core
+* `projects/output_files/openFPGA-RISC-V_pocket.sof` for JTAG programming
+* `projects/output_files/openFPGA-RISC-V_pocket.sta.summary` for timing results
+
+To create the Pocket slot-0 `boot.bin`, install `dtc`, put the Linux `Image`,
+OpenSBI binary, and initramfs at `litex/images/Image`,
+`litex/images/opensbi.bin`, and `litex/images/rootfs.cpio.gz`, then run:
+
+```bash
+cd litex
+make linux-package
+```
+
+This generates the device tree and writes
+`pkg/pocket/Assets/riscv/common/boot.bin`. The packer rejects empty or oversized
+components before replacing the output image.
 
 ## Writing Software
 

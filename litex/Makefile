@@ -1,4 +1,4 @@
-.PHONY: build2 linux linux-dts linux-image linux-package
+.PHONY: build2 linux linux-check linux-dts linux-image linux-package
 
 build2:
 	python3 ./analogue_pocket.py --build
@@ -7,6 +7,10 @@ build2:
 
 linux:
 	python3 ./analogue_pocket.py --linux --build
+	python3 ./linux_check.py
+
+linux-check:
+	python3 ./linux_check.py
 
 linux-dts:
 	python3 ./linux_dts.py
